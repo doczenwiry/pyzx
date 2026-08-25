@@ -20,7 +20,6 @@ import unittest
 import sys
 from fractions import Fraction
 
-import pyzx
 from pyzx import EdgeType, compare_tensors
 
 if __name__ == '__main__':

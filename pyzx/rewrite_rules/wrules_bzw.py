@@ -108,7 +108,7 @@ def match_bialgebra_zw_reverse(g: BaseGraph[VT,ET], vertices: Optional[Collectio
 
         count_wi = 0
         for nb in g.neighbors(w):
-            if g.type(nb) == VertexType.W_INPUT and g.edge_type( (w,nb) ) == EdgeType.W_IO:
+            if g.type(nb) == VertexType.W_INPUT and g.edge_type( g.edge(w,nb) ) == EdgeType.W_IO:
                 count_wi += 1
 
                 # The W_INPUT vertex cannot be connected to any Z vertex
@@ -189,7 +189,7 @@ def unsafe_apply_bialgebra_zw_reverse(g: BaseGraph[VT,ET], wos: Collection[VT], 
             lambda nb: g.vertex_degree(nb) == 2 and g.type(nb) == VertexType.W_INPUT and g.edge_type(g.edge(w,nb)) == EdgeType.W_IO, g.neighbors(w)
         ))
         i = next(filter(lambda nb: nb not in wos and nb not in zs, g.neighbors(wi)))
-        g.add_edge( (i,new_z), g.edge_type( (wi,i) ) )
+        g.add_edge( (i,new_z), g.edge_type( g.edge(wi,i) ) )
         row_z += g.row(wi)
         qubit_z += g.qubit(wi)
         row_wi += g.row(w)
@@ -209,7 +209,7 @@ def unsafe_apply_bialgebra_zw_reverse(g: BaseGraph[VT,ET], wos: Collection[VT], 
     # Connect the two output vertices (i.e. connected to Z-vertices except the W_OUTPUTs) to the new W_OUTPUT
     for z in zs:
         o = next(filter(lambda nb: nb not in wos and nb not in zs, g.neighbors(z)))
-        g.add_edge( (new_wo,o), g.edge_type( (z,o) ) )
+        g.add_edge( (new_wo,o), g.edge_type( g.edge(z,o) ) )
         row_wo += g.row(z)
         qubit_wo += g.qubit(z)
         g.remove_vertex(z)
