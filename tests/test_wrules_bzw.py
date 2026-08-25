@@ -20,6 +20,7 @@ import unittest
 import sys
 from fractions import Fraction
 
+import pyzx
 from pyzx import EdgeType, compare_tensors
 
 if __name__ == '__main__':
@@ -32,25 +33,33 @@ from pyzx.rewrite_rules.wrules_bzw import (
     match_bialgebra_zw_reverse, check_bialgebra_zw_forward, apply_bialgebra_zw_reverse, apply_bialgebra_zw_forward
 )
 
-def prepare_bialgebra_zw_reverse_graph(qubits, phase):
+def prepare_bialgebra_zw_reverse_graph(qubits, phase, add_loop = False, hadamard_input = False, hadamard_output = False):
     """Prepare a zx-graph on which the reverse BZW rule can be applied."""
     g = Graph()
     wos = []
     zs = []
+
     for q in range(qubits):
-        i = g.add_vertex(qubit=q, row=0)
         wi = g.add_vertex(ty=VertexType.W_INPUT, qubit=q, row=1)
         wo = g.add_vertex(ty=VertexType.W_OUTPUT, qubit=q, row=2)
         z = g.add_vertex(ty=VertexType.Z, qubit=q, row=3)
         g.set_phase(z, phase)
-        o = g.add_vertex(qubit=q, row=4)
 
         wos.append(wo)
         zs.append(z)
 
-        g.add_edge((i, wi))
         g.add_edge((wi, wo), EdgeType.W_IO)
-        g.add_edge((z, o))
+
+        input_edge_type = EdgeType.HADAMARD if hadamard_input and q == 0 else EdgeType.SIMPLE
+        output_edge_type = EdgeType.HADAMARD if hadamard_output and q == 0 else EdgeType.SIMPLE
+
+        if add_loop:
+            g.add_edge((z, wi), input_edge_type)
+        else:
+            i = g.add_vertex(qubit=q, row=0)
+            o = g.add_vertex(qubit=q, row=4)
+            g.add_edge((i, wi), input_edge_type)
+            g.add_edge((z, o), output_edge_type)
 
     for wo, z in itertools.product(wos, zs):
         g.add_edge((wo, z))
@@ -143,6 +152,25 @@ class TestCheckReverseBialgebraZW(unittest.TestCase):
 
         self.assertIsNone(match_bialgebra_zw_reverse(g, wos + zs))
 
+    def test_input_output_loop(self):
+        """ZW-pattern with one output which is also an input should not match."""
+        g, wos, zs = prepare_bialgebra_zw_reverse_graph(qubits = 3, phase = 0, add_loop = True)
+
+        self.assertIsNone(match_bialgebra_zw_reverse(g, wos + zs))
+
+    def test_external_hadamard_edges_loop(self):
+        """ZW-pattern with some external Hadamard edges where one output is also an input should not match."""
+        g_start, wos, zs = prepare_bialgebra_zw_reverse_graph(qubits = 4, phase = 0, add_loop=True, hadamard_input = True)
+        g_final = g_start.copy()
+
+        self.assertIsNone(match_bialgebra_zw_reverse(g_final, wos + zs))
+
+    def test_external_hadamard_edges(self):
+        """ZW-pattern with some external Hadamard edges should match."""
+        g, wos, zs = prepare_bialgebra_zw_reverse_graph(qubits = 4, phase = 0)
+
+        self.assertIsNotNone(match_bialgebra_zw_reverse(g, wos + zs))
+
     def test_equivalence_phase_free(self):
         """ZW-pattern with zero phase should reduce to an equivalent graph."""
         g_start, wos, zs = prepare_bialgebra_zw_reverse_graph(qubits = 3, phase = 0)
@@ -154,6 +182,30 @@ class TestCheckReverseBialgebraZW(unittest.TestCase):
     def test_equivalence_nonzero_phase(self):
         """ZW-pattern with non-zero phase should reduce to an equivalent graph."""
         g_start, wos, zs = prepare_bialgebra_zw_reverse_graph(qubits = 3, phase = 1)
+        g_final = g_start.copy()
+
+        self.assertTrue(apply_bialgebra_zw_reverse(g_final, wos + zs))
+        self.assertTrue(compare_tensors(g_start, g_final, preserve_scalar=True, strategy='naive'))
+
+    def test_equivalence_external_hadamard_edges_input(self):
+        """ZW-pattern with some external Hadamard edges should match."""
+        g_start, wos, zs = prepare_bialgebra_zw_reverse_graph(qubits = 4, phase = 0, hadamard_input = True)
+        g_final = g_start.copy()
+
+        self.assertTrue(apply_bialgebra_zw_reverse(g_final, wos + zs))
+        self.assertTrue(compare_tensors(g_start, g_final, preserve_scalar=True, strategy='naive'))
+
+    def test_equivalence_external_hadamard_edges_output(self):
+        """ZW-pattern with some external Hadamard edges should match."""
+        g_start, wos, zs = prepare_bialgebra_zw_reverse_graph(qubits = 4, phase = 0, hadamard_output = True)
+        g_final = g_start.copy()
+
+        self.assertTrue(apply_bialgebra_zw_reverse(g_final, wos + zs))
+        self.assertTrue(compare_tensors(g_start, g_final, preserve_scalar=True, strategy='naive'))
+
+    def test_equivalence_external_hadamard_edges(self):
+        """ZW-pattern with some external Hadamard edges should match."""
+        g_start, wos, zs = prepare_bialgebra_zw_reverse_graph(qubits = 4, phase = 0, hadamard_input = True, hadamard_output=True)
         g_final = g_start.copy()
 
         self.assertTrue(apply_bialgebra_zw_reverse(g_final, wos + zs))
